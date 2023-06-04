@@ -1,104 +1,83 @@
-from flask import Flask, request, jsonify
+import psycopg2
 from web3 import Web3
+import json
 
-app = Flask(__name__)
+# Connect to the PostgreSQL database
+conn = psycopg2.connect(
+    host="your_host",
+    port="your_port",
+    database="your_database",
+    user="your_username",
+    password="your_password"
+)
 
-# Initialize Web3 instance
-web3 = Web3(Web3.HTTPProvider('https://infura.io/v3/YOUR_INFURA_PROJECT_ID'))
+# Create a cursor object to execute SQL queries
+cursor = conn.cursor()
 
-# Load the contract ABI and bytecode
-contract_abi = [
-    # Replace with the actual ABI of your smart contract
-    {
-        "constant": false,
-        "inputs": [
-            {
-                "name": "location_id",
-                "type": "uint256"
-            },
-            {
-                "name": "name",
-                "type": "string"
-            },
-            {
-                "name": "address",
-                "type": "string"
-            },
-            {
-                "name": "city",
-                "type": "string"
-            },
-            {
-                "name": "state",
-                "type": "string"
-            },
-            {
-                "name": "country",
-                "type": "string"
-            }
-        ],
-        "name": "createLocation",
-        "outputs": [],
-        "payable": false,
-        "stateMutability": "nonpayable",
-        "type": "function"
+# Retrieve data from the locations table
+cursor.execute("SELECT * FROM locations")
+rows = cursor.fetchall()
+
+# Close the database connection
+cursor.close()
+conn.close()
+
+# Connect to an Ethereum client provider (e.g., Infura)
+web3 = Web3(Web3.HTTPProvider("https://mainnet.infura.io/v3/YOUR_INFURA_PROJECT_ID"))
+
+# Load the compiled contract's ABI
+abi = [...]  # Replace with the actual ABI obtained from compilation
+
+# Set the contract address and account address for interaction
+contract_address = "0x..."  # Replace with the actual deployed contract address
+account_address = "0x..."  # Replace with the Ethereum account address for interaction
+private_key = "..."  # The private key corresponding to the account
+
+# Create the contract instance
+contract = web3.eth.contract(address=contract_address, abi=abi)
+
+# Set the gas price and gas limit for transactions
+gas_price = web3.eth.gas_price
+gas_limit = 3000000
+
+# Iterate over the rows and migrate data to the blockchain
+for row in rows:
+    location_id, name, address, city, state, country = row
+
+    # Transform the data into the appropriate format required by the contract
+    transformed_data = {
+        "id": location_id,
+        "name": name,
+        "address": address,
+        "city": city,
+        "state": state,
+        "country": country
     }
-]
 
-contract_bytecode = "0x..."  # Replace with the actual bytecode of your smart contract
+    # Build the transaction to migrate data to the contract
+    nonce = web3.eth.getTransactionCount(account_address)
+    transaction = contract.functions.addLocation(
+        transformed_data["name"],
+        transformed_data["address"],
+        transformed_data["city"],
+        transformed_data["state"],
+        transformed_data["country"]
+    ).buildTransaction({
+        "from": account_address,
+        "nonce": nonce,
+        "gasPrice": gas_price,
+        "gas": gas_limit
+    })
 
-# Deploy the smart contract
-contract = web3.eth.contract(abi=contract_abi, bytecode=contract_bytecode)
+    # Sign the transaction with the private key
+    signed_transaction = web3.eth.account.sign_transaction(transaction, private_key=private_key)
 
-@app.route('/location-node', methods=['POST'])
-def build_ethereum_node():
-    # Get the location attributes from the request body
-    location = request.get_json()
-    
-    # Extract location attributes from the object
-    location_id = location.get('id')
-    name = location.get('name')
-    address = location.get('address')
-    city = location.get('city')
-    state = location.get('state')
-    country = location.get('country')
-    
-    # Perform the Ethereum node building process
-    try:
-        # Create the Ethereum node using contract function
-        tx_hash = contract.functions.createLocation(
-            location_id, name, address, city, state, country
-        ).transact()
+    # Send the transaction to the Ethereum network
+    transaction_hash = web3.eth.send_raw_transaction(signed_transaction.rawTransaction)
 
-        # Wait for the transaction to be mined
-        tx_receipt = web3.eth.waitForTransactionReceipt(tx_hash)
+    # Wait for the transaction to be mined
+    transaction_receipt = web3.eth.wait_for_transaction_receipt(transaction_hash)
 
-        # Check if the transaction was successful
-        if tx_receipt.status:
-            response = {
-                'status': 'success',
-                'message': 'Ethereum node created successfully',
-                'location_id': location_id,
-                'name': name,
-                'address': address,
-                'city': city,
-                'state': state,
-                'country': country
-            }
-            return jsonify(response)
-        else:
-            response = {
-                'status': 'error',
-                'message': 'Failed to create Ethereum node'
-            }
-            return jsonify(response), 500
-    except Exception as e:
-        response = {
-            'status': 'error',
-            'message': 'An error occurred while creating Ethereum node',
-            'error': str(e)
-        }
-        return jsonify(response), 500
+    print(f"Data migrated for location ID: {location_id}")
 
-if __name__ == '__main__':
-    app.run(debug=True)
+print("Data migration complete.")
