@@ -1,0 +1,29 @@
+version: '3.9'
+services:
+  db:
+    image: postgres
+    restart: always
+    environment:
+      POSTGRES_USER: your_username
+      POSTGRES_PASSWORD: your_password
+      POSTGRES_DB: your_database_name
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./baseline.sql:/docker-entrypoint-initdb.d/your_script.sql
+  database_converter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - POSTGRES_HOST=your_postgres_host
+      - POSTGRES_PORT=your_postgres_port
+      - POSTGRES_DATABASE=your_postgres_database
+      - POSTGRES_USER=your_postgres_user
+      - POSTGRES_PASSWORD=your_postgres_password
+      - INFURA_PROJECT_ID=your_infura_project_id
+    volumes:
+      - ./database_converter.py:/app/database_converter.py
+      - ./requirements.txt:/app/requirements.txt
+    command: python database_converter.py
+

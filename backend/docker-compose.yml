@@ -1,0 +1,11 @@
+version: '3'
+services:
+  flask-converter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - 5000:5000
+    environment:
+      - INFURA_PROJECT_ID=your_infura_project_id
+
