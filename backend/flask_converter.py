@@ -1,22 +1,59 @@
 from flask import Flask, request, jsonify
 from web3 import Web3
 
-# Connect to the Ethereum network
-web3 = Web3(Web3.HTTPProvider('https://your-infura-endpoint'))
-
-# Set up the Ethereum account
-account = web3.eth.account.from_key('your-private-key')
-contract_address = 'your-contract-address'
-
 app = Flask(__name__)
 
+# Initialize Web3 instance
+web3 = Web3(Web3.HTTPProvider('https://infura.io/v3/YOUR_INFURA_PROJECT_ID'))
+
+# Load the contract ABI and bytecode
+contract_abi = [
+    # Replace with the actual ABI of your smart contract
+    {
+        "constant": false,
+        "inputs": [
+            {
+                "name": "location_id",
+                "type": "uint256"
+            },
+            {
+                "name": "name",
+                "type": "string"
+            },
+            {
+                "name": "address",
+                "type": "string"
+            },
+            {
+                "name": "city",
+                "type": "string"
+            },
+            {
+                "name": "state",
+                "type": "string"
+            },
+            {
+                "name": "country",
+                "type": "string"
+            }
+        ],
+        "name": "createLocation",
+        "outputs": [],
+        "payable": false,
+        "stateMutability": "nonpayable",
+        "type": "function"
+    }
+]
+
+contract_bytecode = "0x..."  # Replace with the actual bytecode of your smart contract
+
+# Deploy the smart contract
+contract = web3.eth.contract(abi=contract_abi, bytecode=contract_bytecode)
+
 @app.route('/location-node', methods=['POST'])
-def location_node():
+def build_ethereum_node():
     # Get the location attributes from the request body
     location = request.get_json()
-    
-    # Perform the Ethereum node building process with the location attributes
-    # Replace this with your own implementation
     
     # Extract location attributes from the object
     location_id = location.get('id')
@@ -26,30 +63,42 @@ def location_node():
     state = location.get('state')
     country = location.get('country')
     
-    # Convert the location attributes into an Ethereum node
-    node_data = {
-        'location_id': location_id,
-        'name': name,
-        'address': address,
-        'city': city,
-        'state': state,
-        'country': country
-    }
-    
-    # Call the smart contract function to store the Ethereum node data
-    contract = web3.eth.contract(address=contract_address, abi=contract_abi)
-    tx_hash = contract.functions.storeNode(node_data).transact({'from': account.address})
-    web3.eth.waitForTransactionReceipt(tx_hash)
-    
-    # Example response
-    response = {
-        'status': 'success',
-        'message': 'Ethereum node built and stored successfully',
-        'transaction_hash': tx_hash.hex()
-    }
-    
-    return jsonify(response)
+    # Perform the Ethereum node building process
+    try:
+        # Create the Ethereum node using contract function
+        tx_hash = contract.functions.createLocation(
+            location_id, name, address, city, state, country
+        ).transact()
+
+        # Wait for the transaction to be mined
+        tx_receipt = web3.eth.waitForTransactionReceipt(tx_hash)
+
+        # Check if the transaction was successful
+        if tx_receipt.status:
+            response = {
+                'status': 'success',
+                'message': 'Ethereum node created successfully',
+                'location_id': location_id,
+                'name': name,
+                'address': address,
+                'city': city,
+                'state': state,
+                'country': country
+            }
+            return jsonify(response)
+        else:
+            response = {
+                'status': 'error',
+                'message': 'Failed to create Ethereum node'
+            }
+            return jsonify(response), 500
+    except Exception as e:
+        response = {
+            'status': 'error',
+            'message': 'An error occurred while creating Ethereum node',
+            'error': str(e)
+        }
+        return jsonify(response), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
-
